@@ -1,5 +1,6 @@
 pub mod api_key;
 pub mod auth;
+pub mod browser;
 pub mod cache;
 pub mod error_handling;
 pub mod rate_limiting;

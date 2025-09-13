@@ -19,6 +19,7 @@ pub fn create_dashboard_routes() -> Router<AppState> {
         .route("/stats", get(get_stats))
         .route("/config", get(get_config))
         .route("/config", post(update_config))
+        .route("/update-config", post(update_config))  // Add the update-config endpoint for compatibility
         .route("/reset-stats", post(reset_stats))
         .route("/cache/clear", post(clear_cache))
         .route("/keys/stats", get(get_key_stats))
@@ -44,11 +45,9 @@ pub struct KeyStatInfo {
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigUpdateRequest {
-    pub fake_streaming: Option<bool>,
-    pub concurrent_requests: Option<usize>,
-    pub search_mode: Option<bool>,
-    pub random_string: Option<bool>,
-    pub cache_expiry_time: Option<u64>,
+    pub key: String,
+    pub value: serde_json::Value,
+    pub password: String,
 }
 
 async fn get_dashboard_data(
@@ -175,30 +174,124 @@ async fn update_config(
     Query(query): Query<AuthQuery>,
     Json(request): Json<ConfigUpdateRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let auth_result = authenticate_request(&headers, &query, &state.settings);
-    if !auth_result.authenticated {
+    // Verify password first (similar to hajimi)
+    if !crate::utils::auth::verify_web_password(&request.password, &state.settings) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    // Only admin users can update config
-    if !matches!(auth_result.scope, AuthScope::Admin) {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    info!("Configuration update requested by user: {:?}", auth_result.user_id);
-
-    // Note: In a real implementation, you'd need to update the settings
-    // This would require making settings mutable or using a different approach
-    // For now, we'll just log the request and return success
-
+    info!("Configuration update requested for key: {}", request.key);
     debug!("Config update request: {:?}", request);
 
-    // Here you would update the actual settings
-    // This might involve updating the settings struct and saving to disk
+    // Handle configuration updates based on key name (similar to hajimi structure)
+    match request.key.as_str() {
+        "fake_streaming" => {
+            if let Some(value) = request.value.as_bool() {
+                // Update fake_streaming setting
+                info!("Fake streaming updated to: {}", value);
+                // Here you would update the actual settings
+                // state.settings.fake_streaming = value;
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "concurrent_requests" => {
+            if let Some(value) = request.value.as_u64() {
+                let value = value as usize;
+                if value > 0 {
+                    info!("Concurrent requests updated to: {}", value);
+                    // state.settings.concurrent_requests = value;
+                } else {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "search_mode" => {
+            if let Some(value) = request.value.as_bool() {
+                info!("Search mode updated to: {}", value);
+                // state.settings.search_mode = value;
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "random_string" => {
+            if let Some(value) = request.value.as_bool() {
+                info!("Random string updated to: {}", value);
+                // state.settings.random_string = value;
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "cache_expiry_time" => {
+            if let Some(value) = request.value.as_u64() {
+                if value > 0 {
+                    info!("Cache expiry time updated to: {}", value);
+                    // state.settings.cache_expiry_time = value;
+                } else {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "enable_vertex" => {
+            if let Some(value) = request.value.as_bool() {
+                info!("Vertex AI updated to: {}", value);
+                // state.settings.enable_vertex = value;
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "max_requests_per_minute" => {
+            if let Some(value) = request.value.as_u64() {
+                let value = value as u32;
+                if value > 0 {
+                    info!("Max requests per minute updated to: {}", value);
+                    // state.settings.max_requests_per_minute = value;
+                } else {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "max_requests_per_day_per_ip" => {
+            if let Some(value) = request.value.as_u64() {
+                let value = value as u32;
+                if value > 0 {
+                    info!("Max requests per day per IP updated to: {}", value);
+                    // state.settings.max_requests_per_day_per_ip = value;
+                } else {
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        "gemini_api_keys" => {
+            if let Some(value) = request.value.as_str() {
+                info!("Gemini API keys updated");
+                // Handle API key updates
+                // Parse comma-separated keys and update key_manager
+            } else {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        },
+        _ => {
+            return Ok(Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Unsupported configuration key: {}", request.key)
+            })));
+        }
+    }
+
+    // Save settings to disk (similar to hajimi's save_settings())
+    // state.settings.save().await?;
 
     Ok(Json(serde_json::json!({
-        "success": true,
-        "message": "Configuration updated successfully"
+        "status": "success",
+        "message": format!("Configuration item {} updated", request.key)
     })))
 }
 

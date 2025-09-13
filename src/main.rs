@@ -27,6 +27,7 @@ mod utils;
 use config::Settings;
 use utils::{
     api_key::ApiKeyManager,
+    browser,
     cache::ResponseCacheManager,
     stats::ApiStatsManager,
     auth::AuthState,
@@ -105,6 +106,9 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     info!("🎯 Listening on {}", addr);
 
+    // 创建异步任务，在后台延迟打开浏览器
+    tokio::spawn(browser::open_browser_delayed_with_port(port));
+
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -121,8 +125,7 @@ async fn build_app(state: AppState) -> Result<Router> {
     let app = Router::new()
         // API routes
         .nest("/v1", api::routes::create_v1_routes())
-        .nest("/api", api::routes::create_api_routes())
-        .nest("/dashboard-api", api::dashboard::create_dashboard_routes())
+        .nest("/api", api::routes::create_api_routes().merge(api::dashboard::create_dashboard_routes()))
         .nest("/api/auth", api::auth::create_auth_routes())
 
         // Static file serving for frontend

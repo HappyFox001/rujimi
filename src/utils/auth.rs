@@ -209,6 +209,10 @@ pub fn authenticate_request(
     }
 }
 
+pub fn verify_web_password(password: &str, settings: &Settings) -> bool {
+    password == settings.web_password
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
