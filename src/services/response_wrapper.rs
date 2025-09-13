@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use tracing::{debug, warn};
+// Removed unused imports
 
-use crate::models::schemas::{GeminiResponse, GeminiContent, GeminiPart, GeminiCandidate, Usage, ToolCall, FunctionCall};
+use crate::models::schemas::{GeminiResponse, GeminiPart, Usage, ToolCall, FunctionCall, GeminiContent, GeminiCandidate, GeminiUsageMetadata};
 
 /// Response wrapper for Gemini API responses - equivalent to Python's GeminiResponseWrapper
 #[derive(Debug, Clone)]
@@ -142,7 +142,12 @@ impl GeminiResponseWrapper {
     pub fn get_safety_ratings(&self) -> Vec<Value> {
         self.response.candidates
             .first()
-            .map(|candidate| candidate.safety_ratings.clone().unwrap_or_default())
+            .map(|candidate| {
+                candidate.safety_ratings.clone().unwrap_or_default()
+                    .into_iter()
+                    .map(|rating| serde_json::to_value(rating).unwrap_or(Value::Null))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -150,7 +155,7 @@ impl GeminiResponseWrapper {
     pub fn extract_text(&self) -> GeneratedText {
         let text = self.get_text().unwrap_or_default();
         let thoughts = self.get_thoughts();
-        let token_count = self.get_token_count().map(|u| u.total_tokens);
+        let token_count = self.get_token_count().map(|u| u.total_tokens as i32);
         let finish_reason = self.get_finish_reason();
 
         GeneratedText {
@@ -286,7 +291,7 @@ mod tests {
                     parts: vec![GeminiPart::Text { text: text_content }],
                 },
                 finish_reason: Some("STOP".to_string()),
-                index: 0,
+                index: Some(0),
                 safety_ratings: None,
             }],
             usage_metadata: Some(GeminiUsageMetadata {
@@ -294,6 +299,7 @@ mod tests {
                 candidates_token_count: Some(20),
                 total_token_count: Some(30),
             }),
+            prompt_feedback: None,
         }
     }
 

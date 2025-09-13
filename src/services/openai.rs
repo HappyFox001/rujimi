@@ -7,11 +7,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::config::Settings;
 use crate::models::schemas::{
-    ChatCompletionRequest, ChatCompletionResponse, ChatCompletionStreamResponse, Message,
+    ChatCompletionRequest, ChatCompletionChunk as ChatCompletionStreamResponse, ChatMessage,
 };
 use crate::utils::logging::log;
 
@@ -71,8 +71,8 @@ impl OpenAIClient {
         &self,
         request: ChatCompletionRequest,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<ChatCompletionStreamResponse, Box<dyn std::error::Error>>> + Send>>,
-        Box<dyn std::error::Error>,
+        Pin<Box<dyn Stream<Item = Result<ChatCompletionStreamResponse, Box<dyn std::error::Error + Send + Sync>>> + Send>>,
+        Box<dyn std::error::Error + Send + Sync>,
     > {
         // Filter request data based on whitelist
         let filtered_data = self.filter_request_data(&request)?;
@@ -94,12 +94,12 @@ impl OpenAIClient {
         // Construct the URL for Gemini's OpenAI-compatible endpoint
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key={}",
-            self.settings.api_key
+            self.settings.gemini_api_keys.first().unwrap_or(&String::new())
         );
 
         // Ensure streaming is enabled
         let mut streaming_request = filtered_data;
-        streaming_request.base.stream = Some(true);
+        streaming_request.base.stream = true;
 
         debug!("发送流式请求到OpenAI兼容端点: {}", url);
 
@@ -113,9 +113,10 @@ impl OpenAIClient {
             .await?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await?;
-            error!("OpenAI兼容API请求失败: {} - {}", response.status(), error_text);
-            return Err(format!("OpenAI API error: {} - {}", response.status(), error_text).into());
+            error!("OpenAI兼容API请求失败: {} - {}", status, error_text);
+            return Err(format!("OpenAI API error: {} - {}", status, error_text).into());
         }
 
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -133,18 +134,23 @@ impl OpenAIClient {
 
                         // Process complete lines
                         let buffer_str = String::from_utf8_lossy(&buffer);
-                        let mut lines: Vec<&str> = buffer_str.lines().collect();
+                        let all_lines: Vec<String> = buffer_str.lines().map(|s| s.to_string()).collect();
 
-                        // Keep the last incomplete line in buffer
-                        if !buffer_str.ends_with('\n') && !lines.is_empty() {
-                            let last_line = lines.pop().unwrap();
-                            buffer = last_line.as_bytes().to_vec();
+                        // Determine which lines to process and what to keep in buffer
+                        let (lines_to_process, new_buffer) = if !buffer_str.ends_with('\n') && !all_lines.is_empty() {
+                            // Keep the last line in buffer, process the rest
+                            let last_line = all_lines.last().unwrap();
+                            let process_lines = &all_lines[..all_lines.len()-1];
+                            (process_lines.to_vec(), last_line.as_bytes().to_vec())
                         } else {
-                            buffer.clear();
-                        }
+                            // Process all lines, clear buffer
+                            (all_lines.clone(), Vec::new())
+                        };
 
-                        for line in lines {
-                            if let Some(chunk_response) = Self::parse_sse_line(line) {
+                        buffer = new_buffer;
+
+                        for line in lines_to_process {
+                            if let Some(chunk_response) = Self::parse_sse_line(&line) {
                                 if tx.send(Ok(chunk_response)).await.is_err() {
                                     return; // Receiver dropped
                                 }
@@ -175,7 +181,7 @@ impl OpenAIClient {
     }
 
     /// Filter request data based on whitelist - equivalent to Python's filter_data
-    fn filter_request_data(&self, request: &ChatCompletionRequest) -> Result<FilteredRequest, Box<dyn std::error::Error>> {
+    fn filter_request_data(&self, request: &ChatCompletionRequest) -> Result<FilteredRequest, Box<dyn std::error::Error + Send + Sync>> {
         let request_json = serde_json::to_value(request)?;
         let mut filtered = serde_json::Map::new();
 
@@ -229,8 +235,13 @@ impl OpenAIClient {
         // Check if any message contains search-related content or if search parameter is set
         request.messages.iter().any(|msg| {
             msg.content.as_ref().map_or(false, |content| {
-                content.to_lowercase().contains("search") ||
-                content.to_lowercase().contains("搜索")
+                match content {
+                    serde_json::Value::String(s) => {
+                        s.to_lowercase().contains("search") ||
+                        s.to_lowercase().contains("搜索")
+                    },
+                    _ => false
+                }
             })
         })
     }
@@ -265,7 +276,7 @@ impl OpenAIClient {
     pub async fn health_check(&self) -> bool {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key={}",
-            self.settings.api_key
+            self.settings.gemini_api_keys.first().unwrap_or(&String::new())
         );
 
         // Simple health check request
@@ -322,33 +333,26 @@ mod tests {
         let mut request = ChatCompletionRequest {
             model: "gemini-1.5-flash".to_string(),
             messages: vec![
-                Message {
+                ChatMessage {
                     role: "user".to_string(),
-                    content: Some("Please search for information about AI".to_string()),
+                    content: Some(serde_json::Value::String("Please search for information about AI".to_string())),
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
                 }
             ],
+            stream: false,
             temperature: None,
             top_p: None,
-            n: None,
-            stream: None,
-            stop: None,
             max_tokens: None,
-            presence_penalty: None,
-            frequency_penalty: None,
-            logit_bias: None,
-            user: None,
-            response_format: None,
-            seed: None,
             tools: None,
             tool_choice: None,
+            extra: std::collections::HashMap::new(),
         };
 
         assert!(OpenAIClient::is_search_mode_enabled(&request));
 
-        request.messages[0].content = Some("Just a normal question".to_string());
+        request.messages[0].content = Some(serde_json::Value::String("Just a normal question".to_string()));
         assert!(!OpenAIClient::is_search_mode_enabled(&request));
     }
 
