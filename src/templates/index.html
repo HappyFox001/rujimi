@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rujimi Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo h1 {
+            color: #667eea;
+            font-size: 1.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logout-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .card h3 {
+            margin-bottom: 1rem;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-healthy {
+            background: #27ae60;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0.25rem;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d63031;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .config-section {
+            margin-top: 2rem;
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <h1>🚀 Rujimi Dashboard</h1>
+        </div>
+        <div class="user-info">
+            <span id="userInfo">管理员</span>
+            <button class="logout-btn" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="errorMsg" class="error" style="display: none;"></div>
+
+        <div id="loadingMsg" class="loading">
+            加载中...
+        </div>
+
+        <div id="dashboardContent" style="display: none;">
+            <div class="dashboard-grid">
+                <!-- Service Status Card -->
+                <div class="card">
+                    <h3>
+                        <span class="status-indicator status-healthy"></span>
+                        服务状态
+                    </h3>
+                    <div class="stat-item">
+                        <span>运行状态</span>
+                        <span class="stat-value" id="serviceStatus">运行中</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>运行时间</span>
+                        <span class="stat-value" id="uptime">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>可用密钥</span>
+                        <span class="stat-value" id="availableKeys">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>缓存条目</span>
+                        <span class="stat-value" id="cacheEntries">-</span>
+                    </div>
+                </div>
+
+                <!-- API Statistics Card -->
+                <div class="card">
+                    <h3>📊 API 统计</h3>
+                    <div class="stat-item">
+                        <span>总请求数</span>
+                        <span class="stat-value" id="totalRequests">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>成功请求</span>
+                        <span class="stat-value" id="successfulRequests">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>失败请求</span>
+                        <span class="stat-value" id="failedRequests">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>使用令牌</span>
+                        <span class="stat-value" id="tokensUsed">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>每分钟请求</span>
+                        <span class="stat-value" id="requestsPerMinute">-</span>
+                    </div>
+                </div>
+
+                <!-- Configuration Card -->
+                <div class="card">
+                    <h3>⚙️ 配置</h3>
+                    <div class="config-item">
+                        <span>假流式传输</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="fakeStreaming">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <span>搜索模式</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="searchMode">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <span>Vertex AI</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="vertexEnabled" disabled>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card">
+                <h3>🔧 操作</h3>
+                <button class="btn" onclick="refreshData()">刷新数据</button>
+                <button class="btn btn-danger" onclick="resetStats()">重置统计</button>
+                <button class="btn btn-danger" onclick="clearCache()">清空缓存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dashboardData = {};
+
+        async function loadDashboardData() {
+            try {
+                const token = localStorage.getItem('rujimi_token');
+                if (!token) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                const response = await fetch('/dashboard-api/data', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        logout();
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                dashboardData = await response.json();
+                updateDashboard();
+
+                document.getElementById('loadingMsg').style.display = 'none';
+                document.getElementById('dashboardContent').style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                showError('加载数据失败: ' + error.message);
+                document.getElementById('loadingMsg').style.display = 'none';
+            }
+        }
+
+        function updateDashboard() {
+            // Update service status
+            document.getElementById('serviceStatus').textContent = dashboardData.status?.running ? '运行中' : '已停止';
+            document.getElementById('uptime').textContent = formatUptime(dashboardData.status?.uptime || 0);
+            document.getElementById('availableKeys').textContent = dashboardData.status?.api_keys_available || 0;
+            document.getElementById('cacheEntries').textContent = dashboardData.status?.cache_entries || 0;
+
+            // Update API statistics
+            document.getElementById('totalRequests').textContent = dashboardData.stats?.total_requests || 0;
+            document.getElementById('successfulRequests').textContent = dashboardData.stats?.successful_requests || 0;
+            document.getElementById('failedRequests').textContent = dashboardData.stats?.failed_requests || 0;
+            document.getElementById('tokensUsed').textContent = (dashboardData.stats?.tokens_used || 0).toLocaleString();
+            document.getElementById('requestsPerMinute').textContent = dashboardData.stats?.requests_per_minute || 0;
+
+            // Update configuration
+            document.getElementById('fakeStreaming').checked = dashboardData.config?.fake_streaming || false;
+            document.getElementById('searchMode').checked = dashboardData.config?.search_mode || false;
+            document.getElementById('vertexEnabled').checked = dashboardData.config?.vertex_enabled || false;
+        }
+
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+
+            if (days > 0) {
+                return `${days}天 ${hours}小时`;
+            } else if (hours > 0) {
+                return `${hours}小时 ${minutes}分钟`;
+            } else {
+                return `${minutes}分钟`;
+            }
+        }
+
+        function showError(message) {
+            const errorMsg = document.getElementById('errorMsg');
+            errorMsg.textContent = message;
+            errorMsg.style.display = 'block';
+            setTimeout(() => {
+                errorMsg.style.display = 'none';
+            }, 5000);
+        }
+
+        async function resetStats() {
+            if (!confirm('确定要重置所有统计数据吗？')) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('rujimi_token');
+                const response = await fetch('/dashboard-api/reset-stats', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    showError('统计数据已重置');
+                    refreshData();
+                } else {
+                    throw new Error('重置失败');
+                }
+            } catch (error) {
+                showError('重置统计数据失败: ' + error.message);
+            }
+        }
+
+        async function clearCache() {
+            if (!confirm('确定要清空所有缓存吗？')) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('rujimi_token');
+                const response = await fetch('/dashboard-api/cache/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    showError('缓存已清空');
+                    refreshData();
+                } else {
+                    throw new Error('清空失败');
+                }
+            } catch (error) {
+                showError('清空缓存失败: ' + error.message);
+            }
+        }
+
+        function refreshData() {
+            document.getElementById('loadingMsg').style.display = 'block';
+            document.getElementById('dashboardContent').style.display = 'none';
+            loadDashboardData();
+        }
+
+        function logout() {
+            localStorage.removeItem('rujimi_token');
+            localStorage.removeItem('rujimi_login_time');
+            window.location.href = '/';
+        }
+
+        // Check authentication and load data
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('rujimi_token');
+            const loginTime = localStorage.getItem('rujimi_login_time');
+
+            if (!token || !loginTime) {
+                window.location.href = '/';
+                return;
+            }
+
+            const now = Date.now();
+            const loginTimeMs = parseInt(loginTime);
+            const dayInMs = 24 * 60 * 60 * 1000;
+
+            // Check if login is still valid (24 hours)
+            if (now - loginTimeMs >= dayInMs) {
+                logout();
+                return;
+            }
+
+            loadDashboardData();
+        });
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            const token = localStorage.getItem('rujimi_token');
+            if (token && document.getElementById('dashboardContent').style.display !== 'none') {
+                loadDashboardData();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
