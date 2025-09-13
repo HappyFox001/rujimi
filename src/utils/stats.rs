@@ -272,6 +272,32 @@ impl ApiStatsManager {
         }
     }
 
+    /// Public method to cleanup expired records - called by maintenance scheduler
+    pub fn cleanup_expired_records(&self, max_age: Duration) -> usize {
+        let cutoff = SystemTime::now() - max_age;
+
+        // Use blocking to avoid async in sync context
+        let rt = tokio::runtime::Handle::try_current();
+        if let Ok(handle) = rt {
+            handle.block_on(async {
+                let mut records = self.call_records.write().await;
+                let old_count = records.len();
+                records.retain(|r| r.timestamp > cutoff);
+                let new_count = records.len();
+                let cleaned = old_count - new_count;
+
+                if cleaned > 0 {
+                    drop(records); // Release the lock before updating cached stats
+                    self.update_cached_stats().await;
+                }
+                cleaned
+            })
+        } else {
+            // Fallback if no runtime available
+            0
+        }
+    }
+
     // Get time series data for charts (last 24 hours, hourly buckets)
     pub async fn get_hourly_stats(&self) -> Vec<(SystemTime, u32, u64)> {
         let records = self.call_records.read().await;

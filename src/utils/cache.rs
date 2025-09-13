@@ -111,7 +111,13 @@ impl ResponseCacheManager {
         info!("Cache cleared");
     }
 
-    pub async fn cleanup_expired(&self) {
+    pub fn clear_sync(&self) {
+        self.cache.clear();
+        self.access_times.clear();
+        info!("Cache cleared");
+    }
+
+    pub async fn cleanup_expired(&self) -> usize {
         let ttl = Duration::from_secs(self.settings.cache_expiry_time);
         let mut removed_count = 0;
         let mut keys_to_remove = Vec::new();
@@ -155,6 +161,8 @@ impl ResponseCacheManager {
         if removed_count > 0 {
             info!("Cleaned up {} expired cache entries", removed_count);
         }
+
+        removed_count
     }
 
     async fn enforce_size_limit(&self) {
