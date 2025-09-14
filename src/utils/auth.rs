@@ -234,8 +234,14 @@ mod tests {
 
     #[test]
     fn test_validate_user_agent() {
+        use std::collections::HashSet;
+
+        let mut whitelist = HashSet::new();
+        whitelist.insert("mozilla".to_string());
+        whitelist.insert("curl".to_string());
+
         let settings = Settings {
-            whitelist_user_agent: vec!["Mozilla".to_string(), "curl".to_string()],
+            whitelist_user_agent: whitelist,
             ..Default::default()
         };
 

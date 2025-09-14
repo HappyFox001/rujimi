@@ -314,7 +314,7 @@ async fn list_models(
         });
 
         // Add search variant if search mode is enabled
-        if state.settings.search_mode && model_name.starts_with("gemini") {
+        if state.settings.search.search_mode && model_name.starts_with("gemini") {
             models.push(Model {
                 id: format!("{}-search", model_name),
                 object: "model".to_string(),

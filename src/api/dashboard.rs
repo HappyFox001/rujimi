@@ -92,7 +92,7 @@ async fn get_dashboard_data(
         concurrent_requests: state.settings.concurrent_requests,
         cache_enabled: state.settings.max_cache_entries > 0,
         vertex_enabled: state.settings.enable_vertex,
-        search_mode: state.settings.search_mode,
+        search_mode: state.settings.search.search_mode,
     };
 
     // Get version info
@@ -162,7 +162,7 @@ async fn get_config(
         concurrent_requests: state.settings.concurrent_requests,
         cache_enabled: state.settings.max_cache_entries > 0,
         vertex_enabled: state.settings.enable_vertex,
-        search_mode: state.settings.search_mode,
+        search_mode: state.settings.search.search_mode,
     };
 
     Ok(Json(config))

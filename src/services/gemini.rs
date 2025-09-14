@@ -153,7 +153,7 @@ impl GeminiClient {
         }
 
         // Add search tools if search mode is enabled and model supports it
-        if self.settings.search_mode && request.model.contains("-search") {
+        if self.settings.search.search_mode && request.model.contains("-search") {
             let search_tools: Vec<Value> = serde_json::from_str(GEMINI_SEARCH_TOOLS)?;
             // Merge with existing tools if any
         }
