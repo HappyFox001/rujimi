@@ -11,6 +11,7 @@ use tracing::{debug, info};
 use crate::models::schemas::{ServiceStatus, ApiStats, ConfigInfo, VersionInfo};
 use crate::utils::auth::{authenticate_request, AuthQuery, AuthScope};
 use crate::utils::version;
+use crate::config::save_settings;
 use crate::AppState;
 
 pub fn create_dashboard_routes() -> Router<AppState> {
@@ -287,7 +288,9 @@ async fn update_config(
     }
 
     // Save settings to disk (similar to hajimi's save_settings())
-    // state.settings.save().await?;
+    if let Err(e) = save_settings(&state.settings, &state.settings.storage_dir) {
+        tracing::warn!("Failed to save settings: {}", e);
+    }
 
     Ok(Json(serde_json::json!({
         "status": "success",

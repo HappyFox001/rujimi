@@ -24,13 +24,14 @@ mod models;
 mod services;
 mod utils;
 
-use config::Settings;
+use config::{Settings, load_settings, settings_file_exists};
 use utils::{
     api_key::ApiKeyManager,
     browser,
     cache::ResponseCacheManager,
     stats::ApiStatsManager,
     auth::AuthState,
+    error_handling::translate_error,
 };
 use services::gemini::GeminiClient;
 
@@ -58,8 +59,19 @@ async fn main() -> Result<()> {
     info!("🚀 Starting Rujimi - High-performance Gemini API Proxy");
 
     // Load configuration
-    let settings = Arc::new(Settings::load()?);
+    let mut settings = Settings::load()?;
     info!("✅ Configuration loaded successfully");
+
+    // Load persistent settings if enabled and file exists
+    if settings.enable_storage && settings_file_exists(&settings.storage_dir) {
+        if let Ok(persistent_settings) = load_settings(&settings.storage_dir) {
+            // Merge persistent settings into current settings
+            settings = persistent_settings;
+            info!("📁 Persistent settings loaded from: {}", settings.storage_dir);
+        }
+    }
+
+    let settings = Arc::new(settings);
 
     // Initialize components
     let key_manager = Arc::new(ApiKeyManager::new(settings.clone()));

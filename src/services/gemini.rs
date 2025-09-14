@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use crate::config::Settings;
+use crate::config::{Settings, get_safety_settings, get_safety_settings_g2};
 use crate::models::schemas::{
     ChatCompletionRequest, ChatCompletionResponse, ChatChoice, ChatMessage, Usage,
     ChatCompletionChunk, ChatChoiceDelta, ChatMessageDelta,
@@ -239,24 +239,22 @@ impl GeminiClient {
     }
 
     fn get_safety_settings(&self) -> Vec<GeminiSafetySetting> {
-        vec![
-            GeminiSafetySetting {
-                category: "HARM_CATEGORY_HARASSMENT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
-            },
-            GeminiSafetySetting {
-                category: "HARM_CATEGORY_HATE_SPEECH".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
-            },
-            GeminiSafetySetting {
-                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
-            },
-            GeminiSafetySetting {
-                category: "HARM_CATEGORY_DANGEROUS_CONTENT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
-            },
-        ]
+        // Use configured safety settings (check if model supports Gemini 2.0)
+        let config_settings = if self.is_gemini_2_model("") {
+            get_safety_settings_g2()
+        } else {
+            get_safety_settings()
+        };
+
+        // Convert config SafetySetting to GeminiSafetySetting
+        config_settings.into_iter().map(|setting| GeminiSafetySetting {
+            category: setting.category,
+            threshold: setting.threshold,
+        }).collect()
+    }
+
+    fn is_gemini_2_model(&self, model: &str) -> bool {
+        model.contains("gemini-2.0") || model.contains("gemini-exp")
     }
 
     fn convert_gemini_response(&self, gemini_response: GeminiResponse, request: &ChatCompletionRequest) -> Result<ChatCompletionResponse> {

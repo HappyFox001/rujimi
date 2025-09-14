@@ -28,6 +28,8 @@ pub struct AuthQuery {
     password: Option<String>,
 }
 
+// Note: Auth middleware exists but is not currently used since rujimi uses different auth strategy
+#[allow(dead_code)]
 pub async fn auth_middleware(
     headers: HeaderMap,
     Query(query): Query<AuthQuery>,
@@ -112,6 +114,7 @@ fn validate_auth_token(token: &str, settings: &Settings) -> bool {
     false
 }
 
+#[allow(dead_code)]
 pub async fn web_auth_middleware(
     headers: HeaderMap,
     Query(query): Query<AuthQuery>,
@@ -155,6 +158,7 @@ pub fn validate_user_agent(user_agent: Option<&str>, settings: &Settings) -> boo
     false // No user agent provided, but whitelist is configured
 }
 
+#[allow(dead_code)]
 pub fn is_public_mode(settings: &Settings) -> bool {
     settings.public_mode
 }
