@@ -11,7 +11,7 @@ use tracing::{debug, info};
 use crate::models::schemas::{ServiceStatus, ApiStats, ConfigInfo, VersionInfo};
 use crate::utils::auth::{authenticate_request, AuthQuery, AuthScope};
 use crate::utils::version;
-use crate::config::save_settings;
+use crate::config::ConfigManager;
 use crate::AppState;
 
 pub fn create_dashboard_routes() -> Router<AppState> {
@@ -158,12 +158,15 @@ async fn get_config(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // Get current settings from global config manager (like hajimi's settings.PROPERTY)
+    let current_settings = ConfigManager::get_settings().await;
+
     let config = ConfigInfo {
-        fake_streaming: state.settings.fake_streaming,
-        concurrent_requests: state.settings.concurrent_requests,
-        cache_enabled: state.settings.max_cache_entries > 0,
-        vertex_enabled: state.settings.enable_vertex,
-        search_mode: state.settings.search.search_mode,
+        fake_streaming: current_settings.fake_streaming,
+        concurrent_requests: current_settings.concurrent_requests,
+        cache_enabled: current_settings.max_cache_entries > 0,
+        vertex_enabled: current_settings.enable_vertex,
+        search_mode: current_settings.search.search_mode,
     };
 
     Ok(Json(config))
@@ -175,8 +178,9 @@ async fn update_config(
     Query(query): Query<AuthQuery>,
     Json(request): Json<ConfigUpdateRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Verify password first (similar to hajimi)
-    if !crate::utils::auth::verify_web_password(&request.password, &state.settings) {
+    // Get current settings for password verification (similar to hajimi)
+    let current_settings = ConfigManager::get_settings().await;
+    if !crate::utils::auth::verify_web_password(&request.password, &current_settings) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -287,9 +291,14 @@ async fn update_config(
         }
     }
 
-    // Save settings to disk (similar to hajimi's save_settings())
-    if let Err(e) = save_settings(&state.settings, &state.settings.storage_dir) {
-        tracing::warn!("Failed to save settings: {}", e);
+    // Update configuration using global config manager - mimics hajimi's behavior:
+    // settings.PROPERTY = value; save_settings()
+    if let Err(e) = ConfigManager::update_config(&request.key, request.value).await {
+        tracing::error!("Failed to update configuration {}: {}", request.key, e);
+        return Ok(Json(serde_json::json!({
+            "status": "error",
+            "message": format!("Failed to update configuration: {}", e)
+        })));
     }
 
     Ok(Json(serde_json::json!({

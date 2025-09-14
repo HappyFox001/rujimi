@@ -24,7 +24,7 @@ mod models;
 mod services;
 mod utils;
 
-use config::{Settings, load_settings, settings_file_exists};
+use config::{Settings, load_settings, settings_file_exists, ConfigManager};
 use utils::{
     api_key::ApiKeyManager,
     browser,
@@ -70,6 +70,9 @@ async fn main() -> Result<()> {
             info!("📁 Persistent settings loaded from: {}", settings.storage_dir);
         }
     }
+
+    // Initialize global config manager - mimics hajimi's global settings module
+    ConfigManager::initialize(settings.clone()).await;
 
     let settings = Arc::new(settings);
 
